@@ -24,41 +24,54 @@ function Invoke-CMakeBuild {
 		[string]	$CmakeArgs = "", 
 		[Parameter()]
 		[ValidateSet("WARNING", "NORMAL", "DEBUG")]
-		[string]	$LogLevel = "Normal"
+		[string]	$LogLevel = "Normal",
+		[Parameter()]
+		[switch] 	$SkipPreMake
 		# [Parameter()]
 		# [ValidateSet("Release", "Debug")]
 		# [string]	$Config = "Debug"
 	)
-
+	$config = "debug"
 	# Add Generator
 	if ($BuildTarget -eq "UNIX") {
 		$CmakeArgs = "$CmakeArgs -G'Unix Makefiles'"
+	}
+	else{
+		Write-Error "MSVC not supported yet."	#TODO: Add suport for MSVC
 	}
 	# Add LogLevel
 	if ($LogLevel -ne "NORMAL") {
 		$CmakeArgs = "$CmakeArgs --log-level $LogLevel"
 	}
-	# $CmakeArgs = "$CmakeArgs --preset $Config"
 
-	Write-Host "Cleaning output folders"
-	Invoke-Expression "rm -Recurse -Force bin/d*, include/d*, lib/*"
-	if (Test-Path -Path build){
-		Invoke-Expression "rm -Recurse -Force build"
+	# $CmakeArgs = "$CmakeArgs --preset $Config"
+	if (-not $SkipPreMake){
+		Write-Host "Cleaning output folders"
+		Invoke-Expression "rm -Recurse -Force bin/d*, include/d*, lib/*"
+		if (Test-Path -Path build){
+			Invoke-Expression "rm -Recurse -Force build"
+		}
+
+		Write-Host "Creating Build folder..."
+		Invoke-Expression "mkdir -p build/$config"	#TODO: Add support for config
+		Invoke-Expression "git submodule init; git submodule update"
 	}
 
-	Write-Host "Creating Build folder..."
-	Invoke-Expression "mkdir -p build/run"
-	Invoke-Expression "git submodule init; git submodule update"
-
-
 	Write-Host "Building..."
-	Invoke-Expression "cd build/run"
+	Invoke-Expression "cd build/$config"
 
-	Invoke-Expression "cmake $CmakeArgs ../.." -InformationVariable $build_cmake
-	Invoke-Expression "make -j $((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors / 2)" -InformationVariable $build_make
-	Invoke-Expression "make install" -InformationVariable $build_makeInstall
-	"$build_cmake `n $build_make `n $build_makeInstall" | Out-File -FilePath .log
-
+	if ($LogLevel -ne "Warning"){
+		Invoke-Expression "cmake $CmakeArgs ../.." | Tee-Object -FilePath .\.log
+		Invoke-Expression "make -j $((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors / 2)" | Tee-Object -FilePath .log
+		Invoke-Expression "make install" | Tee-Object -FilePath .log
+	}
+	else {
+		Invoke-Expression "cmake $CmakeArgs ../.." | Out-Null
+		Invoke-Expression "make -j $((Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors / 2)" | Out-Null
+		Invoke-Expression "make install" | Out-Null
+	}
+	
+	Move-Item -Force compile_commands.json ../..
 	Invoke-Expression "cd ../.."
 }
 function Invoke-CMakeTests() {
@@ -73,10 +86,20 @@ function Invoke-CMakeTests() {
 	}
 }
 
-function Invoke-Cmake() {
+function Invoke-Cmake {
+	param ( 
+		[Parameter()]
+		[ValidateSet("UNIX", "MSVC")]
+		[string]	$BuildTarget = "UNIX",
+		[Parameter()]
+		[string]	$CmakeArgs = "", 
+		[Parameter()]
+		[ValidateSet("WARNING", "NORMAL", "DEBUG")]
+		[string]	$LogLevel = "Normal"
+	)
 	Invoke-CMakeHeader;
 	if (-not $?) { return; }
-	Invoke-CMakeBuild;
+	Invoke-CMakeBuild -BuildTarget $BuildTarget -CmakeArgs $CmakeArgs -LogLevel $LogLevel;
 	if (-not $?) { return; }
 	Invoke-CMakeTests;
 }
