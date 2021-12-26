@@ -12,10 +12,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -O3")
 if (MSVC)
     # warning level 4 and all warnings as errors
-	add_compile_options(/W0)
+	add_compile_options("/W0")
 else()
     # lots of warnings and all warnings as errors
-    add_compile_options(-Wno-everything)
+    add_compile_options("-Wno-everything")
 endif()
 
 
